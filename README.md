@@ -46,6 +46,10 @@ Or use the `--db` CLI flag which bypasses auto-discovery entirely.
 - beads: v0.55.4
 - OS: macOS (Darwin 25.2.0)
 
+## Upstream Issue
+
+- [steveyegge/beads#1951](https://github.com/steveyegge/beads/issues/1951)
+
 ## Related Issues
 
 - [steveyegge/beads#1833](https://github.com/steveyegge/beads/issues/1833) -- `no-db: true` broken in v0.50+ (related: config override doesn't prevent Dolt discovery)
