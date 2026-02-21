@@ -1,57 +1,56 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== Beads Dolt cross-repo discovery repro ==="
+echo "=== Beads BEADS_DIR env var overrides local .beads directory ==="
 echo "bd version: $(bd --version)"
 echo ""
 
 TMPDIR=$(mktemp -d)
 trap "rm -rf $TMPDIR" EXIT
 
-# Create a single git repo as the shared root
 cd "$TMPDIR"
-git init monorepo
+git init monorepo >/dev/null 2>&1
 cd monorepo
 
-# Create repo-a with alpha prefix
-mkdir -p repo-a/.beads
-cat > repo-a/.beads/config.yaml << 'YAML'
+# Create two projects with different beads prefixes
+mkdir -p project-a/.beads
+cat > project-a/.beads/config.yaml << 'YAML'
 issue-prefix: "alpha"
 no-db: true
 YAML
-
-cat > repo-a/.beads/issues.jsonl << 'JSONL'
+cat > project-a/.beads/issues.jsonl << 'JSONL'
 {"id":"alpha-abc","title":"Alpha issue one","status":"open","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}
 {"id":"alpha-def","title":"Alpha issue two","status":"open","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}
 JSONL
 
-# Create repo-b with beta prefix
-mkdir -p repo-b/.beads
-cat > repo-b/.beads/config.yaml << 'YAML'
+mkdir -p project-b/.beads
+cat > project-b/.beads/config.yaml << 'YAML'
 issue-prefix: "beta"
 no-db: true
 YAML
-
-cat > repo-b/.beads/issues.jsonl << 'JSONL'
+cat > project-b/.beads/issues.jsonl << 'JSONL'
 {"id":"beta-xyz","title":"Beta issue one","status":"open","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}
 JSONL
 
-echo "=== Expected: repo-b should show only beta-* issues ==="
+echo "--- 1. Without BEADS_DIR: bd correctly finds local .beads ---"
+echo ""
+echo "From project-a:"
+(cd project-a && env -u BEADS_DIR bd where 2>&1)
+echo ""
+echo "From project-b:"
+(cd project-b && env -u BEADS_DIR bd where 2>&1)
 echo ""
 
-echo "--- bd list from repo-b (no workaround) ---"
-cd repo-b
-bd list 2>&1 || true
+echo "--- 2. With BEADS_DIR pointing to project-a: project-b is broken ---"
+echo ""
+echo "Simulating direnv setting BEADS_DIR for project-a:"
+export BEADS_DIR="$PWD/project-a/.beads"
+echo "  BEADS_DIR=$BEADS_DIR"
+echo ""
+echo "From project-b (should find beta, but finds alpha instead):"
+(cd project-b && bd where 2>&1)
 echo ""
 
-echo "--- bd list from repo-b with BEADS_DIR workaround ---"
-BEADS_DIR="$PWD/.beads" bd list 2>&1 || true
-echo ""
-
-echo "--- bd list from repo-a for comparison ---"
-cd ../repo-a
-bd list 2>&1 || true
-echo ""
-
-echo "=== If bug is present: repo-b picks up alpha-* issues from repo-a ==="
-echo "=== Workaround: BEADS_DIR=\$PWD/.beads forces correct local .beads ==="
+echo "=== Bug: BEADS_DIR from parent environment overrides local .beads ==="
+echo "=== This happens when direnv sets BEADS_DIR in a parent project ==="
+echo "=== and child processes (agents, scripts) inherit it.           ==="
